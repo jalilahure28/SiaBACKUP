@@ -1,5 +1,6 @@
 from django.shortcuts import render, redirect
 import json
+from django.db.models import Count
 from django.views.generic import ListView, CreateView
 from django.contrib.auth.decorators import login_required
 from django.contrib.auth.mixins import LoginRequiredMixin, UserPassesTestMixin
@@ -13,6 +14,18 @@ class ListaCursosEstudianteView(ListView):
     model = Curso
     template_name = 'cursosestudiante/listadocursos.html'
     context_object_name = 'object_list'
+
+    def get_queryset(self):
+        # 1. Obtenemos el ID del estudiante de la sesión
+        estudiante_id = self.request.session.get('estudiante_id')
+        
+        if estudiante_id:
+            # 2. Filtramos los cursos usando la relación inversa 'enrolamientos'
+            # (definida en tu modelo Enrolamiento con related_name='enrolamientos')
+            return Curso.objects.filter(enrolamientos__estudiante_id=estudiante_id)
+        else:
+            # Si no hay sesión de estudiante, no mostramos nada
+            return Curso.objects.none()
     
 def menu_estudiante(request):
     # Verifica si el usuario tiene una sesión activa
@@ -32,66 +45,83 @@ def menu_estudiante(request):
     return render(request, 'cursosestudiante/menuestudiante.html', {'user': usuario})
 
 def RevisarAvancesView(request):
-    # Obtener el estudiante logueado
-    usuario_id = request.session.get('usuario_id')  # Obtener ID del estudiante desde la sesión
+    usuario_id = request.session.get('usuario_id')
     if not usuario_id:
-        return redirect('login:login')  # Si no hay usuario logueado, redirigir al login
+        return redirect('login:login')
 
-    # Obtener el estudiante con el ID guardado en la sesión
     try:
         usuario = Estudiante.objects.get(id=usuario_id)
     except Estudiante.DoesNotExist:
-        return redirect('login:login_estudiante')  # Redirigir si el estudiante no se encuentra
+        return redirect('login:login_estudiante')
 
-    # Obtener los cursos en los que el estudiante está inscrito
+    # 1. Obtener cursos del estudiante
     enrolamientos = Enrolamiento.objects.filter(estudiante=usuario)
-    cursos_inscritos = [enrolamiento.curso for enrolamiento in enrolamientos]
+    
+    cursos_data = []
+    total_cursos_completados = 0
+    suma_porcentajes_totales = 0
 
-    # Obtener el avance general
-    avances = Avance.objects.filter(id_estudiante=usuario)
-    total_cursos = len(cursos_inscritos)
-    cursos_completados = avances.filter(completado=True).count()
-    porcentaje_general = (cursos_completados / total_cursos) * 100 if total_cursos > 0 else 0
-
-    # Información de los cursos y su progreso
-    cursos_info = []
-    for curso in cursos_inscritos:
-        # Obtener el avance del curso
-        avance_curso = avances.filter(id_curso=curso).first()  # Tomamos el primer avance del curso
-
-        # Obtener los pacientes relacionados con el curso
+    for enrol in enrolamientos:
+        curso = enrol.curso
+        
+        # Obtener pacientes del curso
         pacientes = Paciente.objects.filter(id_curso=curso)
+        pacientes_data = []
+        
+        total_etapas_curso = 0
+        etapas_completadas_curso = 0
 
-        # Obtener el progreso de cada paciente y sus etapas
-        pacientes_info = []
-        for paciente in pacientes:
-            etapas = Etapa.objects.filter(id_paciente=paciente)
-            etapas_info = []
+        for index, paciente in enumerate(pacientes):
+            # Obtener etapas del paciente
+            etapas = Etapa.objects.filter(id_paciente=paciente).order_by('numetapa')
+            etapas_data = []
+            
+            # Verificar estado de cada etapa
             for etapa in etapas:
-                # Verificar si la etapa ha sido completada por el estudiante
-                etapa_completada = EtapaCompletada.objects.filter(estudiante=usuario, etapa=etapa).exists()
-                etapas_info.append({
-                    'etapa': etapa.nombreetapa,
-                    'completada': etapa_completada
+                completada = EtapaCompletada.objects.filter(estudiante=usuario, etapa=etapa).exists()
+                etapas_data.append({
+                    'num': etapa.numetapa,
+                    'nombre': etapa.nombreetapa,
+                    'completada': completada
                 })
+                
+                # Contadores para el porcentaje del curso
+                total_etapas_curso += 1
+                if completada:
+                    etapas_completadas_curso += 1
 
-            pacientes_info.append({
-                'paciente': paciente.nombre,
-                'etapas': etapas_info
+            pacientes_data.append({
+                'id_interno': f"c{curso.id}-p{paciente.id}", # ID único para los tabs JS
+                'indice': index + 1, # Para mostrar "Paciente 1", "Paciente 2"
+                'nombre': paciente.nombre,
+                'etapas': etapas_data
             })
 
-        cursos_info.append({
-            'curso': curso.nombrecurso,
-            'avance': avance_curso.porcentajeavance if avance_curso else 0,
-            'pacientes': pacientes_info
+        # Calcular porcentaje del curso
+        porcentaje_curso = 0
+        if total_etapas_curso > 0:
+            porcentaje_curso = int((etapas_completadas_curso / total_etapas_curso) * 100)
+        
+        if porcentaje_curso == 100:
+            total_cursos_completados += 1
+            
+        suma_porcentajes_totales += porcentaje_curso
+
+        cursos_data.append({
+            'curso': curso,
+            'porcentaje': porcentaje_curso,
+            'pacientes': pacientes_data
         })
 
+    # Calcular porcentaje general (promedio de avance de todos los cursos)
+    total_cursos = len(cursos_data)
+    porcentaje_general = 0
+    if total_cursos > 0:
+        porcentaje_general = int(suma_porcentajes_totales / total_cursos)
+
     return render(request, 'cursosestudiante/avances.html', {
-        'cursos_info': cursos_info,
+        'cursos_data': cursos_data,
         'porcentaje_general': porcentaje_general,
+        'cursos_completados_count': total_cursos_completados,
         'usuario': usuario
     })
-
-# Vista provisional para "editar perfil"
-def EditarPerfilView(request):
-    return HttpResponse("Esta es una vista provisional para editar el perfil.")
