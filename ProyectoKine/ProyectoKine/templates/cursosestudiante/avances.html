@@ -1,0 +1,127 @@
+{% extends 'base_site.html' %}
+{% load static %}
+
+{% block title %}Avances del Curso y Pacientes{% endblock %}
+
+{% block nav_buttons %}
+    <a href="{% url 'login:logout' %}"
+       class="bg-red-600 hover:bg-red-700 text-white font-bold py-2 px-4 rounded-full shadow">
+        CERRAR SESIÓN
+    </a>
+{% endblock %}
+
+{% block content %}
+    <div class="container mx-auto py-10 px-4 sm:px-6 lg:px-8">
+
+        <!-- Título de la página -->
+        <h2 class="text-4xl font-extrabold text-center text-gray-900 mb-6">AVANCES DEL CURSO Y PACIENTES</h2>
+
+        <!-- Progreso general de los cursos -->
+        <div class="w-full max-w-4xl p-6 bg-white shadow-2xl rounded-lg mb-6 mx-auto">
+            <h3 class="text-xl font-extrabold text-center text-gray-900 mb-4">Progreso General del Estudiante</h3>
+            
+            <div class="flex justify-between items-center mb-4">
+                <span class="text-lg font-medium text-gray-700">Avance General</span>
+                <span class="text-xl font-semibold text-gray-900">{{ porcentaje_general }}%</span>
+            </div>
+            
+            <div class="w-full bg-gray-200 h-2 mb-6">
+                <div class="bg-blue-700 h-full" style="width: {{ porcentaje_general }}%"></div>
+            </div>
+            
+            <h4 class="text-lg font-bold text-center text-gray-900 mb-4">Progreso por Curso</h4>
+
+            <!-- Progreso de los cursos -->
+            <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6 mx-auto">
+                {% for curso in cursos_info %}
+                    <div class="p-4 bg-white shadow-lg rounded-lg text-center w-full">
+                        <h5 class="text-lg font-semibold text-gray-900 mb-2">{{ curso.curso }}</h5>
+                        <p class="text-sm text-gray-500">Avance: {{ curso.avance }}%</p>
+                        
+                        <button class="curso-btn bg-gray-400 text-white font-bold py-2 px-6 rounded-full mt-4" 
+                                data-curso-id="{{ forloop.counter0 }}"
+                                data-curso-nombre="{{ curso.curso }}"
+                                data-curso-avance="{{ curso.avance }}"
+                                data-pacientes="{{ curso.pacientes|escapejs }}">
+                            Ver Detalles
+                        </button>
+                    </div>
+                {% endfor %}
+            </div>
+        </div>
+
+        <!-- Detalles de los pacientes y etapas -->
+        <div class="w-full max-w-4xl p-6 bg-white shadow-2xl rounded-lg mx-auto">
+            <h3 class="text-xl font-extrabold text-center text-gray-900 mb-4">Progreso del Curso</h3>
+
+            <div id="progreso-curso" class="w-full max-w-4xl p-6 bg-white shadow-2xl rounded-lg mb-6 mx-auto">
+                <h3 id="titulo-curso" class="text-xl font-extrabold text-center text-gray-900 mb-4">Progreso del Curso</h3>
+                <div id="progreso-pacientes" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6 mx-auto">
+                    <!-- Pacientes dinámicos se cargarán aquí -->
+                </div>
+            </div>
+        </div>
+
+        <div class="w-full mt-10 flex justify-center">
+            <a href="{% url 'cursosestudiante:menu_estudiante' %}" class="px-6 py-2 rounded-full bg-gray-400 text-white font-semibold hover:bg-blue-600 transition">
+                VOLVER AL MENÚ
+            </a>
+        </div>
+
+    </div>
+
+    <script>
+        // Datos de los cursos recibidos desde el servidor
+        const cursosInfo = JSON.parse('{{ cursos_info|escapejs }}');
+
+        // Función para mostrar el progreso del curso y los pacientes
+        function mostrarProgresoCurso(cursoIndex) {
+            const curso = cursosInfo[cursoIndex];
+            const cursoNombre = curso.curso;
+            const pacientes = curso.pacientes;
+
+            // Actualizamos la tarjeta de "Progreso del Curso"
+            const progresoCurso = document.getElementById("progreso-curso");
+            const tituloCurso = document.getElementById("titulo-curso");
+            progresoCurso.innerHTML = `
+                <h3 class="text-xl font-extrabold text-center text-gray-900 mb-4">${cursoNombre}</h3>
+                <p class="text-lg font-semibold text-gray-900">Avance: ${curso.avance}%</p>
+                <div class="w-full bg-gray-200 h-2 mb-6">
+                    <div class="bg-blue-700 h-full" style="width: ${curso.avance}%"></div>
+                </div>
+            `;
+
+            // Mostramos los pacientes de ese curso
+            const progresoPacientes = document.getElementById("progreso-pacientes");
+            progresoPacientes.innerHTML = '';  // Limpiamos los pacientes anteriores
+
+            pacientes.forEach(paciente => {
+                let pacienteDiv = `
+                    <div class="w-full max-w-sm p-6 bg-white shadow-2xl rounded-lg text-center mb-4">
+                        <h5 class="text-lg font-extrabold text-gray-900 mb-2">${paciente.paciente}</h5>
+                `;
+                
+                paciente.etapas.forEach((etapa, index) => {
+                    pacienteDiv += `
+                        <button class="font-bold py-2 px-4 rounded-full mb-2 ${etapa.completada ? 'bg-blue-700' : 'bg-gray-400'}">
+                            ETAPA ${index + 1}: ${etapa.completada ? 'Completada' : 'Pendiente'}
+                        </button>
+                    `;
+                });
+
+                pacienteDiv += `</div>`;
+                progresoPacientes.innerHTML += pacienteDiv;
+            });
+        }
+
+        // Agregar evento a los botones de cursos
+        const cursoBtns = document.querySelectorAll('.curso-btn');
+        cursoBtns.forEach(btn => {
+            btn.addEventListener('click', function() {
+                const cursoIndex = btn.getAttribute('data-curso-id');
+                mostrarProgresoCurso(cursoIndex);
+            });
+        });
+    </script>
+
+{% endblock %}
