@@ -483,4 +483,3 @@ def guardar_exploracion(request):
         "etapa_completa": etapa_completa,
         "msg": "Respuesta guardada correctamente."
     })
-

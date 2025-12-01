@@ -47,7 +47,7 @@ def menu_estudiante(request):
 def RevisarAvancesView(request):
     usuario_id = request.session.get('usuario_id')
     if not usuario_id:
-        return redirect('login:login')
+        return redirect('login:login_estudiante')
 
     try:
         usuario = Estudiante.objects.get(id=usuario_id)
@@ -94,6 +94,7 @@ def RevisarAvancesView(request):
                 'id_interno': f"c{curso.id}-p{paciente.id}", # ID único para los tabs JS
                 'indice': index + 1, # Para mostrar "Paciente 1", "Paciente 2"
                 'nombre': paciente.nombre,
+                'id': paciente.id,
                 'etapas': etapas_data
             })
 
